@@ -1,0 +1,130 @@
+local function setTemporaryNoClip(enabled)
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = not enabled
+            end
+        end
+    else
+        print("HumanoidRootPart not found in player character.")
+    end
+end
+
+local function smallTeleport(targetPosition)
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local increment = 10.5
+    if humanoidRootPart then
+        local distance = (humanoidRootPart.Position - targetPosition).magnitude
+        local increments = math.ceil(distance / increment)
+        for i = 1, increments do
+            local direction = (targetPosition - humanoidRootPart.Position).unit
+            local intermediatePosition = humanoidRootPart.Position + direction * increment
+            if (intermediatePosition - targetPosition).magnitude < increment then
+                intermediatePosition = targetPosition
+            end
+            setTemporaryNoClip(true)
+            humanoidRootPart.CFrame = CFrame.new(intermediatePosition) * CFrame.Angles(math.rad(-90), 0, 0)
+            setTemporaryNoClip(false)
+            wait(0.1)
+            if (humanoidRootPart.Position - intermediatePosition).magnitude > increment then
+                humanoidRootPart.CFrame = CFrame.new(intermediatePosition) * CFrame.Angles(math.rad(-90), 0, 0)
+            end
+        end
+        humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3.8, 0)) * CFrame.Angles(math.rad(-90), 0, 0)
+    else
+        print("HumanoidRootPart not found in player character.")
+    end
+end
+
+local function followAbove(target)
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        local runService = game:GetService("RunService")
+        runService:BindToRenderStep("FollowAbove", Enum.RenderPriority.Character.Value, function()
+            if target.Parent and target.Parent:FindFirstChild("HumanoidRootPart") then
+                local targetPosition = target.Parent.HumanoidRootPart.Position
+                humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3.8, 0)) * CFrame.Angles(math.rad(-90), 0, 0)
+            else
+                runService:UnbindFromRenderStep("FollowAbove")
+            end
+        end)
+    else
+        print("HumanoidRootPart not found in player character.")
+    end
+end
+
+local function isDemonDefeated(demon)
+    local health = demon.Parent:FindFirstChild("Humanoid") and demon.Parent.Humanoid.Health
+    return health and health <= 0
+end
+
+local function teleportToNearestDemon()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        while true do
+            local demons = {}
+            for _, model in ipairs(game.Workspace:GetDescendants()) do
+                if model:IsA("Model") and model.Name == "Demon" then
+                    local primaryPart = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+                    if primaryPart then
+                        table.insert(demons, primaryPart)
+                    end
+                end
+            end
+            table.sort(demons, function(a, b)
+                return (a.Position - humanoidRootPart.Position).Magnitude < (b.Position - humanoidRootPart.Position).Magnitude
+            end)
+            for _, demon in ipairs(demons) do
+                smallTeleport(demon.Position)
+                followAbove(demon)
+                while demon.Parent and not isDemonDefeated(demon) do
+                    wait(0.5)
+                end
+                game:GetService("RunService"):UnbindFromRenderStep("FollowAbove")
+            end
+            wait(1)
+        end
+    else
+        print("HumanoidRootPart not found in player character.")
+    end
+end
+
+local function onDamage()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        local originalPosition = humanoidRootPart.Position
+        local offset = Vector3.new(0, 5, 0) -- Ajuste a distância conforme necessário
+        humanoidRootPart.CFrame = CFrame.new(originalPosition + offset) * CFrame.Angles(math.rad(-90), 0, 0)
+        wait(0.5)
+        humanoidRootPart.CFrame = CFrame.new(originalPosition) * CFrame.Angles(math.rad(-90), 0, 0)
+    else
+        print("HumanoidRootPart not found in player character.")
+    end
+end
+
+-- Conecta a função onDamage ao evento de dano do Humanoid
+local function setupDamageEvent()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.HealthChanged:Connect(function(health)
+            if health < character.Humanoid.Health then
+                onDamage()
+            end
+        end)
+    end
+end
+
+setupDamageEvent()
+teleportToNearestDemon()
